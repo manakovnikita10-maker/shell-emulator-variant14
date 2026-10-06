@@ -1,34 +1,30 @@
-"""Тесты первого этапа."""
+"""Проверки функций первого этапа в итоговой архитектуре этапа 4."""
 
 import unittest
 
-from src.main import parse_line, run_command
+from src.shell import Shell, parse_command
+from src.vfs import VirtualFileSystem
 
 
 class StageOneTests(unittest.TestCase):
-    """Проверяет парсер, заглушки, ошибки и exit."""
+    """Проверяет кавычки, неизвестную команду и exit."""
 
     def test_quoted_argument(self):
         """Текст в кавычках должен быть одним аргументом."""
-        parts = parse_line('cd "my folder"')
+        parts = parse_command('cd "my folder"')
         self.assertEqual(parts, ["cd", "my folder"])
-
-    def test_stub_command(self):
-        """Заглушка ls должна вывести имя и аргументы."""
-        ok, message, should_exit = run_command(["ls", "docs"])
-        self.assertTrue(ok)
-        self.assertEqual(message, "ls: ['docs']")
-        self.assertFalse(should_exit)
 
     def test_unknown_command(self):
         """Неизвестная команда должна вернуть ошибку."""
-        ok, message, _should_exit = run_command(["unknown"])
+        shell = Shell(VirtualFileSystem())
+        ok, message, _should_exit = shell.execute("unknown")
         self.assertFalse(ok)
         self.assertIn("неизвестная команда", message)
 
     def test_exit(self):
-        """Команда exit должна запросить завершение приложения."""
-        ok, message, should_exit = run_command(["exit"])
+        """Команда exit должна запросить закрытие приложения."""
+        shell = Shell(VirtualFileSystem())
+        ok, message, should_exit = shell.execute("exit")
         self.assertTrue(ok)
         self.assertEqual(message, "")
         self.assertTrue(should_exit)

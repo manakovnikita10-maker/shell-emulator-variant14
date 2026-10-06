@@ -1,17 +1,12 @@
-"""Этап 3: GUI-эмулятор с ZIP-VFS в оперативной памяти."""
+"""Этап 4: GUI-эмулятор с основными UNIX-подобными командами."""
 
 import argparse
 import getpass
-import shlex
 import socket
 import tkinter as tk
 
+from src.shell import Shell
 from src.vfs import VirtualFileSystem
-
-
-def parse_line(line):
-    """Разделяет строку на команду и аргументы с учётом кавычек."""
-    return shlex.split(line)
 
 
 def parse_args(argv=None):
@@ -26,36 +21,17 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def run_command(parts):
-    """Выполняет команды до реализации настоящих ls и cd."""
-    if not parts:
-        return True, "", False
-
-    command = parts[0]
-    args = parts[1:]
-    if command in ("ls", "cd"):
-        return True, f"{command}: {args}", False
-
-    if command == "exit":
-        if args:
-            message = "Ошибка: exit не принимает аргументы"
-            return False, message, False
-        return True, "", True
-
-    message = f"Ошибка: неизвестная команда {command}"
-    return False, message, False
-
-
 class EmulatorApp:
-    """Графическое окно эмулятора с подключённой VFS."""
+    """Графическое окно эмулятора командной оболочки."""
 
     def __init__(self, root, args):
-        """Создаёт интерфейс и загружает VFS."""
+        """Создаёт интерфейс, VFS и командную оболочку."""
         self.root = root
         self.args = args
         self.user = getpass.getuser()
         self.host = socket.gethostname()
         self.vfs = VirtualFileSystem()
+        self.shell = Shell(self.vfs)
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
 
         self.output = tk.Text(root, width=78, height=22)
@@ -97,17 +73,14 @@ class EmulatorApp:
         count = self.vfs.file_count()
         self.write(f"VFS загружена в память. Файлов: {count}\n\n")
 
-    def execute_line(self, line):
-        """Разбирает и выполняет одну команду."""
-        prompt = f"{self.user}@{self.host}:~$ "
-        self.write(prompt + line + "\n")
-        try:
-            parts = parse_line(line)
-        except ValueError as error:
-            self.write(f"Ошибка: {error}\n")
-            return False
+    def prompt(self):
+        """Возвращает приглашение с текущим каталогом."""
+        return f"{self.user}@{self.host}:{self.shell.cwd}$ "
 
-        ok, message, should_exit = run_command(parts)
+    def execute_line(self, line):
+        """Выполняет одну команду и показывает результат."""
+        self.write(self.prompt() + line + "\n")
+        ok, message, should_exit = self.shell.execute(line)
         if message:
             self.write(message + "\n")
         if should_exit:
@@ -115,7 +88,7 @@ class EmulatorApp:
         return ok
 
     def on_enter(self, _event=None):
-        """Обрабатывает команду, введённую пользователем."""
+        """Обрабатывает команду после нажатия Enter."""
         line = self.entry.get()
         self.entry.delete(0, tk.END)
         self.execute_line(line)

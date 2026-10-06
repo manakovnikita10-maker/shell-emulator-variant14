@@ -1,0 +1,9 @@
+ls
+cd level1
+ls
+cd level2
+cd level3
+ls
+tac /numbers.txt
+uniq /repeat.txt
+tac missing.txt
