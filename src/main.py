@@ -1,4 +1,4 @@
-"""Этап 2: настраиваемый GUI-эмулятор командной оболочки."""
+"""Этап 3: GUI-эмулятор с ZIP-VFS в оперативной памяти."""
 
 import argparse
 import getpass
@@ -6,17 +6,18 @@ import shlex
 import socket
 import tkinter as tk
 
+from src.vfs import VirtualFileSystem
+
 
 def parse_line(line):
     """Разделяет строку на команду и аргументы с учётом кавычек."""
-    # shlex понимает кавычки: cd "my folder" -> один аргумент.
     return shlex.split(line)
 
 
 def parse_args(argv=None):
     """Получает пути к VFS и стартовому скрипту."""
     parser = argparse.ArgumentParser(description="Эмулятор оболочки")
-    parser.add_argument("--vfs", default="", help="Путь к VFS")
+    parser.add_argument("--vfs", default="", help="Путь к ZIP-VFS")
     parser.add_argument(
         "--script",
         default="",
@@ -26,14 +27,12 @@ def parse_args(argv=None):
 
 
 def run_command(parts):
-    """Выполняет команды, доступные до подключения VFS."""
+    """Выполняет команды до реализации настоящих ls и cd."""
     if not parts:
         return True, "", False
 
     command = parts[0]
     args = parts[1:]
-
-    # До этапа 4 команды ls и cd остаются заглушками.
     if command in ("ls", "cd"):
         return True, f"{command}: {args}", False
 
@@ -48,14 +47,15 @@ def run_command(parts):
 
 
 class EmulatorApp:
-    """Графическое окно эмулятора командной оболочки."""
+    """Графическое окно эмулятора с подключённой VFS."""
 
     def __init__(self, root, args):
-        """Создаёт интерфейс и сохраняет параметры запуска."""
+        """Создаёт интерфейс и загружает VFS."""
         self.root = root
         self.args = args
         self.user = getpass.getuser()
         self.host = socket.gethostname()
+        self.vfs = VirtualFileSystem()
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
 
         self.output = tk.Text(root, width=78, height=22)
@@ -65,8 +65,8 @@ class EmulatorApp:
         self.entry.bind("<Return>", self.on_enter)
         self.entry.focus()
 
-        # По заданию параметры показываются сразу после запуска.
         self.show_config()
+        self.load_vfs()
         if self.args.script:
             self.root.after(100, self.run_startup)
 
@@ -80,13 +80,27 @@ class EmulatorApp:
         vfs_path = self.args.vfs or "не задан"
         script_path = self.args.script or "не задан"
         self.write(f"VFS: {vfs_path}\n")
-        self.write(f"Стартовый скрипт: {script_path}\n\n")
+        self.write(f"Стартовый скрипт: {script_path}\n")
+
+    def load_vfs(self):
+        """Загружает ZIP-VFS только в оперативную память."""
+        if not self.args.vfs:
+            self.write("VFS не задана. Используется пустая VFS.\n\n")
+            return
+
+        try:
+            self.vfs.load_zip(self.args.vfs)
+        except (OSError, ValueError) as error:
+            self.write(f"Ошибка загрузки VFS: {error}\n\n")
+            return
+
+        count = self.vfs.file_count()
+        self.write(f"VFS загружена в память. Файлов: {count}\n\n")
 
     def execute_line(self, line):
         """Разбирает и выполняет одну команду."""
         prompt = f"{self.user}@{self.host}:~$ "
         self.write(prompt + line + "\n")
-
         try:
             parts = parse_line(line)
         except ValueError as error:
@@ -115,7 +129,6 @@ class EmulatorApp:
             self.write(f"Ошибка скрипта: {error}\n")
             return
 
-        # Команды выполняются по очереди как при ручном вводе.
         for raw_line in lines:
             line = raw_line.strip()
             if not line:
