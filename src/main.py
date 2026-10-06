@@ -1,4 +1,4 @@
-"""Этап 4: GUI-эмулятор с основными UNIX-подобными командами."""
+"""Этап 5: финальный GUI-эмулятор командной оболочки."""
 
 import argparse
 import getpass
@@ -28,12 +28,16 @@ class EmulatorApp:
         """Создаёт интерфейс, VFS и командную оболочку."""
         self.root = root
         self.args = args
+        # Реальные имя пользователя и hostname нужны для заголовка.
         self.user = getpass.getuser()
         self.host = socket.gethostname()
+
+        # VFS хранит данные, а Shell разбирает и выполняет команды.
         self.vfs = VirtualFileSystem()
         self.shell = Shell(self.vfs)
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
 
+        # Text показывает историю, Entry принимает новую команду.
         self.output = tk.Text(root, width=78, height=22)
         self.output.pack(padx=10, pady=10)
         self.entry = tk.Entry(root, width=78)
@@ -41,6 +45,7 @@ class EmulatorApp:
         self.entry.bind("<Return>", self.on_enter)
         self.entry.focus()
 
+        # Сначала показываем параметры, затем загружаем ZIP-VFS.
         self.show_config()
         self.load_vfs()
         if self.args.script:

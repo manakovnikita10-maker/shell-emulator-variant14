@@ -1,9 +1,10 @@
-"""Этап 4: команды UNIX-подобного эмулятора оболочки."""
+"""Этап 5: все команды UNIX-подобного эмулятора."""
 
 import shlex
 
 
 ONE_ARGUMENT = 1
+TWO_ARGUMENTS = 2
 
 
 def parse_command(line):
@@ -29,6 +30,7 @@ class Shell:
         if not parts:
             return True, "", False
 
+        # Первый элемент — команда, остальные — её аргументы.
         command = parts[0]
         args = parts[1:]
         try:
@@ -43,8 +45,11 @@ class Shell:
             "cd": self.command_cd,
             "tac": self.command_tac,
             "uniq": self.command_uniq,
+            "chown": self.command_chown,
+            "touch": self.command_touch,
             "exit": self.command_exit,
         }
+        # По имени команды выбираем соответствующий метод.
         handler = commands.get(command)
         if handler is None:
             message = f"Ошибка: неизвестная команда {command}"
@@ -85,11 +90,28 @@ class Shell:
 
         text = self.vfs.read_text(args[0], self.cwd)
         result = []
+        # Как UNIX uniq, удаляем только соседние повторы.
         for line in text.splitlines():
-            # uniq удаляет только соседние одинаковые строки.
             if not result or result[-1] != line:
                 result.append(line)
         return True, "\n".join(result), False
+
+    def command_chown(self, args):
+        """Изменяет владельца файла или каталога в памяти."""
+        if len(args) != TWO_ARGUMENTS:
+            message = "Ошибка: chown требует OWNER и PATH"
+            return False, message, False
+
+        target = self.vfs.chown(args[0], args[1], self.cwd)
+        return True, f"Владелец {target}: {args[0]}", False
+
+    def command_touch(self, args):
+        """Создаёт пустой файл только в памяти VFS."""
+        if len(args) != ONE_ARGUMENT:
+            return False, "Ошибка: touch требует 1 аргумент", False
+
+        target = self.vfs.touch(args[0], self.cwd)
+        return True, f"touch: {target}", False
 
     def command_exit(self, args):
         """Запрашивает завершение работы эмулятора."""

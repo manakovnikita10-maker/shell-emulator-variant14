@@ -1,0 +1,11 @@
+ls
+tac numbers.txt
+uniq repeat.txt
+cd level1
+ls
+cd /
+touch created.txt
+touch "new file.txt"
+ls
+chown student created.txt
+chown admin missing.txt
