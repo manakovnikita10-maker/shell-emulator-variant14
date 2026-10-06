@@ -1,4 +1,4 @@
-"""Этап 5: все команды UNIX-подобного эмулятора."""
+"""Этап 5: команды UNIX-подобного эмулятора."""
 
 import shlex
 
@@ -13,15 +13,20 @@ def parse_command(line):
 
 
 class Shell:
-    """Разбирает и выполняет команды внутри VFS."""
+    """Разбирает и выполняет команды внутри виртуальной файловой системы."""
 
     def __init__(self, vfs):
-        """Сохраняет VFS и начинает работу из корня."""
+        """Сохраняет VFS и начинает работу из корневого каталога."""
         self.vfs = vfs
         self.cwd = "/"
 
     def execute(self, line):
-        """Разбирает и выполняет одну командную строку."""
+        """
+        Разбирает и выполняет одну командную строку.
+
+        Первый элемент разобранной строки считается именем команды,
+        а остальные элементы передаются команде как аргументы.
+        """
         try:
             parts = parse_command(line)
         except ValueError as error:
@@ -30,16 +35,21 @@ class Shell:
         if not parts:
             return True, "", False
 
-        # Первый элемент — команда, остальные — её аргументы.
         command = parts[0]
         args = parts[1:]
+
         try:
             return self._dispatch(command, args)
         except ValueError as error:
             return False, f"Ошибка: {error}", False
 
     def _dispatch(self, command, args):
-        """Выбирает метод для введённой команды."""
+        """
+        Выбирает обработчик по имени команды.
+
+        Каждой поддерживаемой команде соответствует отдельный метод.
+        Если команды нет в таблице, возвращается сообщение об ошибке.
+        """
         commands = {
             "ls": self.command_ls,
             "cd": self.command_cd,
@@ -49,21 +59,26 @@ class Shell:
             "touch": self.command_touch,
             "exit": self.command_exit,
         }
-        # По имени команды выбираем соответствующий метод.
+
         handler = commands.get(command)
+
         if handler is None:
             message = f"Ошибка: неизвестная команда {command}"
             return False, message, False
+
         return handler(args)
 
     def command_ls(self, args):
-        """Показывает содержимое каталога."""
+        """Показывает содержимое каталога или имя указанного файла."""
         if len(args) > ONE_ARGUMENT:
             message = "Ошибка: ls принимает не более 1 аргумента"
             return False, message, False
 
         path = args[0] if args else self.cwd
-        names = self.vfs.list_dir(path, self.cwd)
+        names = self.vfs.list_dir(
+            path,
+            self.cwd,
+        )
         return True, "\n".join(names), False
 
     def command_cd(self, args):
@@ -71,50 +86,73 @@ class Shell:
         if len(args) != ONE_ARGUMENT:
             return False, "Ошибка: cd требует 1 аргумент", False
 
-        self.cwd = self.vfs.change_dir(args[0], self.cwd)
+        self.cwd = self.vfs.change_dir(
+            args[0],
+            self.cwd,
+        )
         return True, "", False
 
     def command_tac(self, args):
-        """Выводит строки файла в обратном порядке."""
+        """Выводит строки текстового файла в обратном порядке."""
         if len(args) != ONE_ARGUMENT:
             return False, "Ошибка: tac требует 1 аргумент", False
 
-        text = self.vfs.read_text(args[0], self.cwd)
+        text = self.vfs.read_text(
+            args[0],
+            self.cwd,
+        )
         lines = text.splitlines()
         return True, "\n".join(reversed(lines)), False
 
     def command_uniq(self, args):
-        """Удаляет соседние повторяющиеся строки файла."""
+        """
+        Удаляет соседние повторяющиеся строки текстового файла.
+
+        Поведение соответствует UNIX-команде uniq: одинаковые строки
+        удаляются только тогда, когда они расположены подряд.
+        """
         if len(args) != ONE_ARGUMENT:
             return False, "Ошибка: uniq требует 1 аргумент", False
 
-        text = self.vfs.read_text(args[0], self.cwd)
+        text = self.vfs.read_text(
+            args[0],
+            self.cwd,
+        )
         result = []
-        # Как UNIX uniq, удаляем только соседние повторы.
+
         for line in text.splitlines():
             if not result or result[-1] != line:
                 result.append(line)
+
         return True, "\n".join(result), False
 
     def command_chown(self, args):
-        """Изменяет владельца файла или каталога в памяти."""
+        """Изменяет владельца файла или каталога только в памяти."""
         if len(args) != TWO_ARGUMENTS:
             message = "Ошибка: chown требует OWNER и PATH"
             return False, message, False
 
-        target = self.vfs.chown(args[0], args[1], self.cwd)
+        target = self.vfs.chown(
+            args[0],
+            args[1],
+            self.cwd,
+        )
         return True, f"Владелец {target}: {args[0]}", False
 
     def command_touch(self, args):
-        """Создаёт пустой файл только в памяти VFS."""
+        """Создаёт пустой файл только в оперативной памяти VFS."""
         if len(args) != ONE_ARGUMENT:
             return False, "Ошибка: touch требует 1 аргумент", False
 
-        target = self.vfs.touch(args[0], self.cwd)
+        target = self.vfs.touch(
+            args[0],
+            self.cwd,
+        )
         return True, f"touch: {target}", False
 
     def command_exit(self, args):
         """Запрашивает завершение работы эмулятора."""
         if args:
             return False, "Ошибка: exit не принимает аргументы", False
+
         return True, "", True
