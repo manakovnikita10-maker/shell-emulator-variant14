@@ -1,0 +1,4 @@
+ls
+cd "folder with spaces"
+unknown_command
+ls this_line_will_not_run
