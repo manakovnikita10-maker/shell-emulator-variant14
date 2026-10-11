@@ -1,0 +1,3 @@
+ls
+cd missing
+ls this_line_will_not_run

@@ -1,4 +1,4 @@
-"""Этап 3: виртуальная файловая система в оперативной памяти."""
+"""Этап 4: ZIP-VFS с командами чтения и навигации."""
 
 import base64
 import posixpath
@@ -6,7 +6,7 @@ import zipfile
 
 
 class VirtualFileSystem:
-    """Хранит ZIP-VFS в словарях и множествах оперативной памяти."""
+    """Хранит файлы и каталоги только в оперативной памяти."""
 
     def __init__(self):
         """Создаёт пустую виртуальную файловую систему."""
@@ -14,7 +14,7 @@ class VirtualFileSystem:
         self.directories = {"/"}
 
     def clear(self):
-        """Очищает содержимое VFS перед новой загрузкой."""
+        """Очищает содержимое виртуальной файловой системы."""
         self.files.clear()
         self.directories = {"/"}
 
@@ -39,14 +39,14 @@ class VirtualFileSystem:
             self._store_file(path, archive.read(info.filename))
 
     def _store_file(self, path, data):
-        """Сохраняет бинарные данные файла в base64."""
+        """Сохраняет файл в памяти в формате base64."""
         clean_path = self._clean(path)
         encoded = base64.b64encode(data).decode("ascii")
         self.files[clean_path] = encoded
         self._add_parents(clean_path)
 
     def _add_directory(self, path):
-        """Добавляет каталог и его родительские каталоги."""
+        """Добавляет каталог и все его родительские каталоги."""
         clean_path = self._clean(path)
         self.directories.add(clean_path)
         self._add_parents(clean_path)
@@ -65,6 +65,54 @@ class VirtualFileSystem:
         if not result.startswith("/"):
             result = "/" + result
         return result
+
+    def resolve(self, path, cwd):
+        """Преобразует относительный путь в абсолютный путь VFS."""
+        if not path:
+            return cwd
+        if path.startswith("/"):
+            return self._clean(path)
+        return self._clean(posixpath.join(cwd, path))
+
+    def list_dir(self, path, cwd):
+        """Возвращает содержимое каталога или имя одного файла."""
+        target = self.resolve(path, cwd)
+        if target in self.files:
+            return [posixpath.basename(target)]
+        if target not in self.directories:
+            raise ValueError("путь не найден")
+        return self._children(target)
+
+    def _children(self, directory):
+        """Возвращает непосредственных потомков каталога."""
+        prefix = "/" if directory == "/" else directory + "/"
+        children = set()
+        paths = list(self.directories) + list(self.files)
+        for path in paths:
+            if not path.startswith(prefix) or path == directory:
+                continue
+            rest = path[len(prefix):]
+            if rest:
+                children.add(rest.split("/", 1)[0])
+        return sorted(children)
+
+    def change_dir(self, path, cwd):
+        """Проверяет каталог и возвращает новый рабочий путь."""
+        target = self.resolve(path, cwd)
+        if target not in self.directories:
+            raise ValueError("каталог не найден")
+        return target
+
+    def read_text(self, path, cwd):
+        """Читает текстовый файл из VFS как UTF-8."""
+        target = self.resolve(path, cwd)
+        if target not in self.files:
+            raise ValueError("файл не найден")
+        raw = base64.b64decode(self.files[target])
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("файл не является текстовым") from error
 
     def file_count(self):
         """Возвращает количество файлов в VFS."""

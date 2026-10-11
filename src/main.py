@@ -1,22 +1,17 @@
-"""Этап 3: GUI-эмулятор с ZIP-VFS в оперативной памяти."""
+"""Этап 4: GUI-эмулятор с основными командами."""
 
 import argparse
 import getpass
-import shlex
 import socket
 import tkinter as tk
 
+from src.shell import Shell
 from src.vfs import VirtualFileSystem
 
 
 WINDOW_WIDTH = 78
 WINDOW_HEIGHT = 22
 START_DELAY_MS = 100
-
-
-def parse_line(line):
-    """Разделяет строку на команду и аргументы с учётом кавычек."""
-    return shlex.split(line)
 
 
 def parse_args(argv=None):
@@ -37,29 +32,8 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def run_command(parts):
-    """Выполняет команды до реализации настоящих ls и cd."""
-    if not parts:
-        return True, "", False
-
-    command = parts[0]
-    args = parts[1:]
-
-    if command in ("ls", "cd"):
-        return True, f"{command}: {args}", False
-
-    if command == "exit":
-        if args:
-            message = "Ошибка: exit не принимает аргументы"
-            return False, message, False
-        return True, "", True
-
-    message = f"Ошибка: неизвестная команда {command}"
-    return False, message, False
-
-
 class EmulatorApp:
-    """Графическое окно с загруженной в память VFS."""
+    """Графическое окно эмулятора командной оболочки."""
 
     def __init__(self, root, args):
         """Создаёт состояние приложения и запускает настройку."""
@@ -68,6 +42,7 @@ class EmulatorApp:
         self.user = getpass.getuser()
         self.host = socket.gethostname()
         self.vfs = VirtualFileSystem()
+        self.shell = Shell(self.vfs)
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
         self._build_interface()
         self.show_config()
@@ -115,27 +90,22 @@ class EmulatorApp:
         if not self.args.vfs:
             self.write("VFS не задана. Используется пустая VFS.\n\n")
             return
-
         try:
             self.vfs.load_zip(self.args.vfs)
         except (OSError, ValueError) as error:
             self.write(f"Ошибка загрузки VFS: {error}\n\n")
             return
-
         count = self.vfs.file_count()
         self.write(f"VFS загружена в память. Файлов: {count}\n\n")
 
-    def execute_line(self, line):
-        """Разбирает и выполняет одну команду."""
-        prompt = f"{self.user}@{self.host}:~$ "
-        self.write(prompt + line + "\n")
-        try:
-            parts = parse_line(line)
-        except ValueError as error:
-            self.write(f"Ошибка: {error}\n")
-            return False
+    def prompt(self):
+        """Возвращает приглашение с текущим каталогом VFS."""
+        return f"{self.user}@{self.host}:{self.shell.cwd}$ "
 
-        ok, message, should_exit = run_command(parts)
+    def execute_line(self, line):
+        """Выполняет одну команду и показывает её результат."""
+        self.write(self.prompt() + line + "\n")
+        ok, message, should_exit = self.shell.execute(line)
         if message:
             self.write(message + "\n")
         if should_exit:
