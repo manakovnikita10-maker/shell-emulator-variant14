@@ -1,9 +1,10 @@
-"""Этап 4: основные команды UNIX-подобного эмулятора."""
+"""Этап 5: команды UNIX-подобного эмулятора."""
 
 import shlex
 
 
 ONE_ARGUMENT = 1
+TWO_ARGUMENTS = 2
 
 
 def parse_command(line):
@@ -43,6 +44,8 @@ class Shell:
             "cd": self.command_cd,
             "tac": self.command_tac,
             "uniq": self.command_uniq,
+            "chown": self.command_chown,
+            "touch": self.command_touch,
             "exit": self.command_exit,
         }
         handler = commands.get(command)
@@ -85,6 +88,21 @@ class Shell:
             if not result or result[-1] != line:
                 result.append(line)
         return True, "\n".join(result), False
+
+    def command_chown(self, args):
+        """Изменяет владельца файла или каталога только в памяти."""
+        if len(args) != TWO_ARGUMENTS:
+            message = "Ошибка: chown требует OWNER и PATH"
+            return False, message, False
+        target = self.vfs.chown(args[0], args[1], self.cwd)
+        return True, f"Владелец {target}: {args[0]}", False
+
+    def command_touch(self, args):
+        """Создаёт пустой файл только в оперативной памяти VFS."""
+        if len(args) != ONE_ARGUMENT:
+            return False, "Ошибка: touch требует 1 аргумент", False
+        target = self.vfs.touch(args[0], self.cwd)
+        return True, f"touch: {target}", False
 
     def command_exit(self, args):
         """Запрашивает завершение работы эмулятора."""
