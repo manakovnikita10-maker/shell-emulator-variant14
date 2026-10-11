@@ -1,10 +1,12 @@
-"""Этап 2: настраиваемый GUI-эмулятор командной оболочки."""
+"""Этап 3: GUI-эмулятор с ZIP-VFS в оперативной памяти."""
 
 import argparse
 import getpass
 import shlex
 import socket
 import tkinter as tk
+
+from src.vfs import VirtualFileSystem
 
 
 WINDOW_WIDTH = 78
@@ -18,14 +20,14 @@ def parse_line(line):
 
 
 def parse_args(argv=None):
-    """Получает пути к VFS и стартовому скрипту."""
+    """Получает пути к ZIP-VFS и стартовому скрипту."""
     parser = argparse.ArgumentParser(
         description="Эмулятор оболочки"
     )
     parser.add_argument(
         "--vfs",
         default="",
-        help="Путь к VFS",
+        help="Путь к ZIP-VFS",
     )
     parser.add_argument(
         "--script",
@@ -36,7 +38,7 @@ def parse_args(argv=None):
 
 
 def run_command(parts):
-    """Выполняет команды, доступные до подключения VFS."""
+    """Выполняет команды до реализации настоящих ls и cd."""
     if not parts:
         return True, "", False
 
@@ -57,17 +59,19 @@ def run_command(parts):
 
 
 class EmulatorApp:
-    """Графическое окно эмулятора командной оболочки."""
+    """Графическое окно с загруженной в память VFS."""
 
     def __init__(self, root, args):
-        """Сохраняет параметры, данные ОС и создаёт интерфейс."""
+        """Создаёт состояние приложения и запускает настройку."""
         self.root = root
         self.args = args
         self.user = getpass.getuser()
         self.host = socket.gethostname()
+        self.vfs = VirtualFileSystem()
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
         self._build_interface()
         self.show_config()
+        self.load_vfs()
         self._schedule_startup()
 
     def _build_interface(self):
@@ -78,7 +82,6 @@ class EmulatorApp:
             height=WINDOW_HEIGHT,
         )
         self.output.pack(padx=10, pady=10)
-
         self.entry = tk.Entry(
             self.root,
             width=WINDOW_WIDTH,
@@ -101,17 +104,31 @@ class EmulatorApp:
         self.output.see(tk.END)
 
     def show_config(self):
-        """Показывает переданные программе параметры."""
+        """Показывает пути к VFS и стартовому скрипту."""
         vfs_path = self.args.vfs or "не задан"
         script_path = self.args.script or "не задан"
         self.write(f"VFS: {vfs_path}\n")
-        self.write(f"Стартовый скрипт: {script_path}\n\n")
+        self.write(f"Стартовый скрипт: {script_path}\n")
+
+    def load_vfs(self):
+        """Загружает ZIP-VFS только в оперативную память."""
+        if not self.args.vfs:
+            self.write("VFS не задана. Используется пустая VFS.\n\n")
+            return
+
+        try:
+            self.vfs.load_zip(self.args.vfs)
+        except (OSError, ValueError) as error:
+            self.write(f"Ошибка загрузки VFS: {error}\n\n")
+            return
+
+        count = self.vfs.file_count()
+        self.write(f"VFS загружена в память. Файлов: {count}\n\n")
 
     def execute_line(self, line):
         """Разбирает и выполняет одну команду."""
         prompt = f"{self.user}@{self.host}:~$ "
         self.write(prompt + line + "\n")
-
         try:
             parts = parse_line(line)
         except ValueError as error:
