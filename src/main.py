@@ -1,5 +1,6 @@
-"""Этап 1: простой GUI-эмулятор командной оболочки."""
+"""Этап 2: настраиваемый GUI-эмулятор командной оболочки."""
 
+import argparse
 import getpass
 import shlex
 import socket
@@ -8,6 +9,7 @@ import tkinter as tk
 
 WINDOW_WIDTH = 78
 WINDOW_HEIGHT = 22
+START_DELAY_MS = 100
 
 
 def parse_line(line):
@@ -15,8 +17,26 @@ def parse_line(line):
     return shlex.split(line)
 
 
+def parse_args(argv=None):
+    """Получает пути к VFS и стартовому скрипту."""
+    parser = argparse.ArgumentParser(
+        description="Эмулятор оболочки"
+    )
+    parser.add_argument(
+        "--vfs",
+        default="",
+        help="Путь к VFS",
+    )
+    parser.add_argument(
+        "--script",
+        default="",
+        help="Путь к стартовому скрипту",
+    )
+    return parser.parse_args(argv)
+
+
 def run_command(parts):
-    """Выполняет команды, доступные на первом этапе."""
+    """Выполняет команды, доступные до подключения VFS."""
     if not parts:
         return True, "", False
 
@@ -37,16 +57,18 @@ def run_command(parts):
 
 
 class EmulatorApp:
-    """Графическое окно, похожее на UNIX-подобный терминал."""
+    """Графическое окно эмулятора командной оболочки."""
 
-    def __init__(self, root):
-        """Сохраняет данные ОС и создаёт элементы интерфейса."""
+    def __init__(self, root, args):
+        """Сохраняет параметры, данные ОС и создаёт интерфейс."""
         self.root = root
+        self.args = args
         self.user = getpass.getuser()
         self.host = socket.gethostname()
         self.root.title(f"Эмулятор - [{self.user}@{self.host}]")
         self._build_interface()
-        self.write("Введите команду. Доступно: ls, cd, exit\n")
+        self.show_config()
+        self._schedule_startup()
 
     def _build_interface(self):
         """Создаёт поле вывода и строку ввода."""
@@ -65,15 +87,28 @@ class EmulatorApp:
         self.entry.bind("<Return>", self.on_enter)
         self.entry.focus()
 
+    def _schedule_startup(self):
+        """Запускает стартовый сценарий после создания окна."""
+        if self.args.script:
+            self.root.after(
+                START_DELAY_MS,
+                self.run_startup,
+            )
+
     def write(self, text):
         """Добавляет текст в область терминала."""
         self.output.insert(tk.END, text)
         self.output.see(tk.END)
 
-    def on_enter(self, _event=None):
-        """Считывает и выполняет одну команду после Enter."""
-        line = self.entry.get()
-        self.entry.delete(0, tk.END)
+    def show_config(self):
+        """Показывает переданные программе параметры."""
+        vfs_path = self.args.vfs or "не задан"
+        script_path = self.args.script or "не задан"
+        self.write(f"VFS: {vfs_path}\n")
+        self.write(f"Стартовый скрипт: {script_path}\n\n")
+
+    def execute_line(self, line):
+        """Разбирает и выполняет одну команду."""
         prompt = f"{self.user}@{self.host}:~$ "
         self.write(prompt + line + "\n")
 
@@ -81,19 +116,47 @@ class EmulatorApp:
             parts = parse_line(line)
         except ValueError as error:
             self.write(f"Ошибка: {error}\n")
-            return
+            return False
 
-        _ok, message, should_exit = run_command(parts)
+        ok, message, should_exit = run_command(parts)
         if message:
             self.write(message + "\n")
         if should_exit:
             self.root.destroy()
+        return ok
+
+    def on_enter(self, _event=None):
+        """Обрабатывает команду, введённую пользователем."""
+        line = self.entry.get()
+        self.entry.delete(0, tk.END)
+        self.execute_line(line)
+
+    def run_startup(self):
+        """Выполняет стартовый скрипт до первой ошибки."""
+        try:
+            with open(
+                self.args.script,
+                encoding="utf-8",
+            ) as file:
+                lines = file.readlines()
+        except OSError as error:
+            self.write(f"Ошибка скрипта: {error}\n")
+            return
+
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if not self.execute_line(line):
+                self.write("Скрипт остановлен из-за ошибки.\n")
+                break
 
 
 def main():
-    """Запускает графический эмулятор."""
+    """Читает параметры и запускает графический эмулятор."""
+    args = parse_args()
     root = tk.Tk()
-    EmulatorApp(root)
+    EmulatorApp(root, args)
     root.mainloop()
 
 
